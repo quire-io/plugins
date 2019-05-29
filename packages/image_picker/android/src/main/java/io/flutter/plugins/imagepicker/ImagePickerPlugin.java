@@ -5,6 +5,8 @@
 package io.flutter.plugins.imagepicker;
 
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.support.annotation.VisibleForTesting;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
@@ -43,12 +45,58 @@ public class ImagePickerPlugin implements MethodChannel.MethodCallHandler {
     this.delegate = delegate;
   }
 
+  // MethodChannel.Result wrapper that responds on the platform thread.
+  private static class MethodResultWrapper implements MethodChannel.Result {
+    private MethodChannel.Result methodResult;
+    private Handler handler;
+
+    MethodResultWrapper(MethodChannel.Result result) {
+      methodResult = result;
+      handler = new Handler(Looper.getMainLooper());
+    }
+
+    @Override
+    public void success(final Object result) {
+      handler.post(
+              new Runnable() {
+                @Override
+                public void run() {
+                  methodResult.success(result);
+                }
+              });
+    }
+
+    @Override
+    public void error(
+            final String errorCode, final String errorMessage, final Object errorDetails) {
+      handler.post(
+              new Runnable() {
+                @Override
+                public void run() {
+                  methodResult.error(errorCode, errorMessage, errorDetails);
+                }
+              });
+    }
+
+    @Override
+    public void notImplemented() {
+      handler.post(
+              new Runnable() {
+                @Override
+                public void run() {
+                  methodResult.notImplemented();
+                }
+              });
+    }
+  }
+
   @Override
-  public void onMethodCall(MethodCall call, MethodChannel.Result result) {
+  public void onMethodCall(MethodCall call, MethodChannel.Result rawResult) {
     if (registrar.activity() == null) {
-      result.error("no_activity", "image_picker plugin requires a foreground activity.", null);
+      rawResult.error("no_activity", "image_picker plugin requires a foreground activity.", null);
       return;
     }
+    MethodChannel.Result result = new MethodResultWrapper(rawResult);
     if (call.method.equals("pickImage")) {
       int imageSource = call.argument("source");
       switch (imageSource) {
