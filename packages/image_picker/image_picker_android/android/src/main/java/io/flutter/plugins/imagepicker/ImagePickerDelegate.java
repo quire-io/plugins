@@ -389,7 +389,7 @@ public class ImagePickerDelegate
                       .setMediaType(ActivityResultContracts.PickVisualMedia.ImageOnly.INSTANCE)
                       .build());
     } else {
-      pickImageIntent = new Intent(Intent.ACTION_GET_CONTENT);
+      pickImageIntent = new Intent(Intent.ACTION_PICK);
       pickImageIntent.setType("image/*");
     }
     activity.startActivityForResult(pickImageIntent, REQUEST_CODE_CHOOSE_IMAGE_FROM_GALLERY);
@@ -406,7 +406,7 @@ public class ImagePickerDelegate
                       .setMediaType(ActivityResultContracts.PickVisualMedia.ImageOnly.INSTANCE)
                       .build());
     } else {
-      pickMultiImageIntent = new Intent(Intent.ACTION_GET_CONTENT);
+      pickMultiImageIntent = new Intent(Intent.ACTION_PICK);
       pickMultiImageIntent.setType("image/*");
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
         pickMultiImageIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
