@@ -36,7 +36,7 @@
     type = [FLTImagePickerMetaDataUtil getImageMIMETypeFromImageData:originalImageData];
     suffix =
         [FLTImagePickerMetaDataUtil imageTypeSuffixFromType:type] ?: kFLTImagePickerDefaultSuffix;
-    metaData = [FLTImagePickerMetaDataUtil getMetaDataFromImageData:originalImageData];
+    metaData = [self fixOrientation: [FLTImagePickerMetaDataUtil getMetaDataFromImageData:originalImageData]];
   }
   if (type == FLTImagePickerMIMETypeGIF) {
     GIFInfo *gifInfo = [FLTImagePickerImageUtil scaledGIFImage:originalImageData
@@ -53,11 +53,28 @@
   }
 }
 
++ (NSDictionary *)fixOrientation: (nullable NSDictionary *) metaData {
+  if (metaData) {
+    NSMutableDictionary *mdic = metaData.mutableCopy;
+    mdic[@"Orientation"] = [NSNumber numberWithInt: 1];
+      
+    if ([mdic[@"{TIFF}"] isKindOfClass:[NSDictionary class]]) {
+      NSMutableDictionary *tiff = ((NSDictionary*) mdic[@"{TIFF}"]).mutableCopy;
+      tiff[@"Orientation"] = [NSNumber numberWithInt: 1];
+      mdic[@"{TIFF}"] = tiff;
+    }
+
+    return mdic;
+  }
+
+  return nil;
+}
+
 + (NSString *)saveImageWithPickerInfo:(nullable NSDictionary *)info
                                 image:(UIImage *)image
                          imageQuality:(NSNumber *)imageQuality {
   NSDictionary *metaData = info[UIImagePickerControllerMediaMetadata];
-  return [self saveImageWithMetaData:metaData
+  return [self saveImageWithMetaData:[self fixOrientation: metaData]
                                image:image
                               suffix:kFLTImagePickerDefaultSuffix
                                 type:kFLTImagePickerMIMETypeDefault

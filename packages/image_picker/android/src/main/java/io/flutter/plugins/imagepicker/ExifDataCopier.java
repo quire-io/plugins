@@ -49,7 +49,7 @@ class ExifDataCopier {
 
   private static void setIfNotNull(ExifInterface oldExif, ExifInterface newExif, String property) {
     if (oldExif.getAttribute(property) != null) {
-      newExif.setAttribute(property, oldExif.getAttribute(property));
+      newExif.setAttribute(property, property.equals("Orientation") ? "1" : oldExif.getAttribute(property));
     }
   }
 }

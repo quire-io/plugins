@@ -6,6 +6,8 @@ package io.flutter.plugins.imagepicker;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
+import android.media.ExifInterface;
 import android.util.Log;
 import androidx.annotation.Nullable;
 import java.io.ByteArrayOutputStream;
@@ -39,13 +41,15 @@ class ImageResizer {
     }
     boolean shouldScale =
         maxWidth != null || maxHeight != null || isImageQualityValid(imageQuality);
-    if (!shouldScale) {
-      return imagePath;
-    }
+
     try {
+      if (!shouldScale) {
+        return fixOrientation(imagePath);
+      }
+
       String[] pathParts = imagePath.split("/");
       String imageName = pathParts[pathParts.length - 1];
-      File file = resizedImage(bmp, maxWidth, maxHeight, imageQuality, imageName);
+      File file = resizedImage(imagePath, bmp, maxWidth, maxHeight, imageQuality, imageName);
       copyExif(imagePath, file.getPath());
       return file.getPath();
     } catch (IOException e) {
@@ -54,7 +58,7 @@ class ImageResizer {
   }
 
   private File resizedImage(
-      Bitmap bmp, Double maxWidth, Double maxHeight, Integer imageQuality, String outputImageName)
+      String path, Bitmap bmp, Double maxWidth, Double maxHeight, Integer imageQuality, String outputImageName)
       throws IOException {
     double originalWidth = bmp.getWidth() * 1.0;
     double originalHeight = bmp.getHeight() * 1.0;
@@ -99,8 +103,13 @@ class ImageResizer {
     }
 
     Bitmap scaledBmp = createScaledBitmap(bmp, width.intValue(), height.intValue(), false);
+    Bitmap fixOrientationScaledBmp = fixOrientation(scaledBmp, path);
+    if (fixOrientationScaledBmp != null)
+      scaledBmp = fixOrientationScaledBmp;
+
     File file =
         createImageOnExternalDirectory("/scaled_" + outputImageName, scaledBmp, imageQuality);
+
     return file;
   }
 
@@ -130,6 +139,7 @@ class ImageResizer {
 
   private File createImageOnExternalDirectory(String name, Bitmap bitmap, int imageQuality)
       throws IOException {
+
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
     boolean saveAsPNG = bitmap.hasAlpha();
     if (saveAsPNG) {
@@ -146,5 +156,60 @@ class ImageResizer {
     fileOutput.write(outputStream.toByteArray());
     fileOutput.close();
     return imageFile;
+  }
+
+  private String fixOrientation(String path) throws IOException {
+    Bitmap bitmap = fixOrientation(BitmapFactory.decodeFile(path), path);
+    if (bitmap == null)
+      return path;
+
+    String[] pathParts = path.split("/");
+    String imageName = pathParts[pathParts.length - 1];
+
+    boolean saveAsPNG = bitmap.hasAlpha();
+    if (saveAsPNG) {
+      Log.d(
+              "ImageResizer",
+              "image_picker: compressing is not supported for type PNG. Returning the image with original quality");
+    }
+
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+
+    bitmap.compress(
+            saveAsPNG ? Bitmap.CompressFormat.PNG : Bitmap.CompressFormat.JPEG,
+            100,
+            outputStream);
+
+    File imageFile = new File(externalFilesDirectory, "/rotated_" + imageName);
+    FileOutputStream fileOutput = new FileOutputStream(imageFile);
+    fileOutput.write(outputStream.toByteArray());
+    fileOutput.close();
+    return imageFile.getPath();
+  }
+
+  private Bitmap fixOrientation(Bitmap bitmap, String path) throws IOException {
+    int rotate = 0;
+    ExifInterface exif;
+    exif = new ExifInterface(path);
+    int orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION,
+            ExifInterface.ORIENTATION_NORMAL);
+
+    switch (orientation) {
+      case ExifInterface.ORIENTATION_ROTATE_270:
+        rotate = 270;
+        break;
+      case ExifInterface.ORIENTATION_ROTATE_180:
+        rotate = 180;
+        break;
+      case ExifInterface.ORIENTATION_ROTATE_90:
+        rotate = 90;
+        break;
+      default:
+        return null;
+    }
+    Matrix matrix = new Matrix();
+    matrix.postRotate(rotate);
+    return Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(),
+            bitmap.getHeight(), matrix, true);
   }
 }

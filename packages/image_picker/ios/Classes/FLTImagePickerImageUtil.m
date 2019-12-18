@@ -69,33 +69,12 @@
     }
   }
 
-  // Scaling the image always rotate itself based on the current imageOrientation of the original
-  // Image. Set to orientationUp for the orignal image before scaling, so the scaled image doesn't
-  // mess up with the pixels.
-  UIImage *imageToScale = [UIImage imageWithCGImage:image.CGImage
-                                              scale:1
-                                        orientation:UIImageOrientationUp];
-
-  // The image orientation is manually set to UIImageOrientationUp which swapped the aspect ratio in
-  // some scenarios. For example, when the original image has orientation left, the horizontal
-  // pixels should be scaled to `width` and the vertical pixels should be scaled to `height`. After
-  // setting the orientation to up, we end up scaling the horizontal pixels to `height` and vertical
-  // to `width`. Below swap will solve this issue.
-  if ([image imageOrientation] == UIImageOrientationLeft ||
-      [image imageOrientation] == UIImageOrientationRight ||
-      [image imageOrientation] == UIImageOrientationLeftMirrored ||
-      [image imageOrientation] == UIImageOrientationRightMirrored) {
-    double temp = width;
-    width = height;
-    height = temp;
-  }
-
   UIGraphicsBeginImageContextWithOptions(CGSizeMake(width, height), NO, 1.0);
-  [imageToScale drawInRect:CGRectMake(0, 0, width, height)];
+  [image drawInRect:CGRectMake(0, 0, width, height)];
 
   UIImage *scaledImage = UIGraphicsGetImageFromCurrentImageContext();
   UIGraphicsEndImageContext();
-  return scaledImage;
+  return [self fixedOrientation: scaledImage];
 }
 
 + (GIFInfo *)scaledGIFImage:(NSData *)data
@@ -142,6 +121,75 @@
   GIFInfo *info = [[GIFInfo alloc] initWithImages:images interval:interval];
 
   return info;
+}
+
++ (UIImage *) fixedOrientation:(UIImage *) image {
+    if (image.imageOrientation == UIImageOrientationUp) {
+        return image;
+    }
+    
+    CGAffineTransform transform = CGAffineTransformIdentity;
+    
+    switch (image.imageOrientation) {
+            case UIImageOrientationDown:
+            case UIImageOrientationDownMirrored:
+            transform = CGAffineTransformTranslate(transform, image.size.width, image.size.height);
+            transform = CGAffineTransformRotate(transform, M_PI);
+            break;
+            
+            case UIImageOrientationLeft:
+            case UIImageOrientationLeftMirrored:
+            transform = CGAffineTransformTranslate(transform, image.size.width, 0);
+            transform = CGAffineTransformRotate(transform, M_PI_2);
+            break;
+            
+            case UIImageOrientationRight:
+            case UIImageOrientationRightMirrored:
+            transform = CGAffineTransformTranslate(transform, 0, image.size.height);
+            transform = CGAffineTransformRotate(transform, -M_PI_2);
+            break;
+            
+        default: break;
+    }
+    
+    switch (image.imageOrientation) {
+            case UIImageOrientationUpMirrored:
+            case UIImageOrientationDownMirrored:
+            // CORRECTION: Need to assign to transform here
+            transform = CGAffineTransformTranslate(transform, image.size.width, 0);
+            transform = CGAffineTransformScale(transform, -1, 1);
+            break;
+            
+            case UIImageOrientationLeftMirrored:
+            case UIImageOrientationRightMirrored:
+            // CORRECTION: Need to assign to transform here
+            transform = CGAffineTransformTranslate(transform, image.size.height, 0);
+            transform = CGAffineTransformScale(transform, -1, 1);
+            break;
+            
+        default: break;
+    }
+    
+    CGContextRef ctx = CGBitmapContextCreate(nil, image.size.width, image.size.height, CGImageGetBitsPerComponent(image.CGImage), 0, CGImageGetColorSpace(image.CGImage), kCGImageAlphaPremultipliedLast);
+    
+    CGContextConcatCTM(ctx, transform);
+    
+    switch (image.imageOrientation) {
+            case UIImageOrientationLeft:
+            case UIImageOrientationLeftMirrored:
+            case UIImageOrientationRight:
+            case UIImageOrientationRightMirrored:
+            CGContextDrawImage(ctx, CGRectMake(0, 0, image.size.height, image.size.width), image.CGImage);
+            break;
+            
+        default:
+            CGContextDrawImage(ctx, CGRectMake(0, 0, image.size.width, image.size.height), image.CGImage);
+            break;
+    }
+    
+    CGImageRef cgImage = CGBitmapContextCreateImage(ctx);
+    
+    return [UIImage imageWithCGImage:cgImage];
 }
 
 @end
